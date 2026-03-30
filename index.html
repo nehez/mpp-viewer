@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MPP Viewer</title>
+  <link rel="stylesheet" href="mpp-viewer.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">MPP Viewer</div>
+    <div class="subtitle">Microsoft Project file viewer — 100% client-side</div>
+  </header>
+
+  <main>
+    <!-- Upload state -->
+    <section id="upload-section" class="state-section">
+      <div
+        id="drop-zone"
+        class="drop-zone"
+        role="button"
+        tabindex="0"
+        aria-label="Drop zone for MPP files"
+      >
+        <div class="drop-icon">&#128196;</div>
+        <p class="drop-primary">Drop your <strong>.mpp</strong> file here</p>
+        <p class="drop-secondary">or</p>
+        <label class="file-label" for="file-input">Browse file</label>
+        <input
+          id="file-input"
+          type="file"
+          accept=".mpp,.MPP"
+          aria-label="Select MPP file"
+        />
+        <p class="drop-note">No upload — files are processed entirely in your browser</p>
+      </div>
+    </section>
+
+    <!-- Loading state -->
+    <section id="loading-section" class="state-section hidden">
+      <div class="loading-box">
+        <div class="spinner" aria-label="Loading"></div>
+        <p>Parsing project file…</p>
+      </div>
+    </section>
+
+    <!-- Error state -->
+    <section id="error-section" class="state-section hidden">
+      <div class="error-box">
+        <div class="error-icon">&#9888;</div>
+        <p id="error-message">Could not read the file.</p>
+        <button id="try-again-btn" class="btn">Try again</button>
+      </div>
+    </section>
+
+    <!-- Results state -->
+    <section id="results-section" class="state-section hidden">
+      <div class="project-bar">
+        <div class="project-meta">
+          <span class="meta-item"><span class="meta-label">Project</span><span id="meta-name" class="meta-value">—</span></span>
+          <span class="meta-item"><span class="meta-label">Start</span><span id="meta-start" class="meta-value">—</span></span>
+          <span class="meta-item"><span class="meta-label">Finish</span><span id="meta-finish" class="meta-value">—</span></span>
+          <span class="meta-item"><span class="meta-label">Tasks</span><span id="meta-count" class="meta-value">—</span></span>
+        </div>
+        <button id="open-another-btn" class="btn btn-secondary">Open another</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="task-table">
+          <thead>
+            <tr>
+              <th class="col-id">ID</th>
+              <th class="col-name">Name</th>
+              <th class="col-date">Start</th>
+              <th class="col-date">Finish</th>
+              <th class="col-dur">Duration</th>
+              <th class="col-pct">% Complete</th>
+            </tr>
+          </thead>
+          <tbody id="task-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="mpp-viewer.js"></script>
+</body>
+</html>
