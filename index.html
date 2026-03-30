@@ -3,41 +3,33 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MPP File Viewer v1.1.0</title>
+  <title>MPP File Viewer v1.2.0</title>
   <link rel="stylesheet" href="mpp-viewer.css" />
 </head>
 <body>
   <header>
-    <div class="logo">MPP File Viewer <span class="version">v1.1.0</span></div>
+    <div class="logo">MPP File Viewer <span class="version">v1.2.0</span></div>
     <div class="subtitle">Microsoft Project XML viewer — 100% client-side, no upload</div>
   </header>
 
   <main>
-    <!-- Upload state -->
+
+    <!-- ── Upload state ── -->
     <section id="upload-section" class="state-section">
-      <div
-        id="drop-zone"
-        class="drop-zone"
-        role="button"
-        tabindex="0"
-        aria-label="Drop zone for MPP files"
-      >
+      <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
+           aria-label="Drop zone for MS Project XML files">
         <div class="drop-icon">&#128196;</div>
         <p class="drop-primary">Drop your <strong>MS Project XML</strong> file here</p>
         <p class="drop-secondary">or</p>
         <label class="file-label" for="file-input">Browse file</label>
-        <input
-          id="file-input"
-          type="file"
-          accept=".xml,.mpp,.MPP,.XML"
-          aria-label="Select MS Project XML file"
-        />
+        <input id="file-input" type="file" accept=".xml,.mpp,.MPP,.XML"
+               aria-label="Select MS Project XML file" />
         <p class="drop-note">No upload — files are processed entirely in your browser</p>
         <p class="drop-hint">In Microsoft Project: <strong>File → Save As → XML Format (*.xml)</strong></p>
       </div>
     </section>
 
-    <!-- Loading state -->
+    <!-- ── Loading state ── -->
     <section id="loading-section" class="state-section hidden">
       <div class="loading-box">
         <div class="spinner" aria-label="Loading"></div>
@@ -45,7 +37,7 @@
       </div>
     </section>
 
-    <!-- Error state -->
+    <!-- ── Error state ── -->
     <section id="error-section" class="state-section hidden">
       <div class="error-box">
         <div class="error-icon">&#9888;</div>
@@ -54,34 +46,70 @@
       </div>
     </section>
 
-    <!-- Results state -->
+    <!-- ── Results state ── -->
     <section id="results-section" class="state-section hidden">
+
+      <!-- Project info bar -->
       <div class="project-bar">
         <div class="project-meta">
-          <span class="meta-item"><span class="meta-label">Project</span><span id="meta-name" class="meta-value">—</span></span>
-          <span class="meta-item"><span class="meta-label">Start</span><span id="meta-start" class="meta-value">—</span></span>
-          <span class="meta-item"><span class="meta-label">Finish</span><span id="meta-finish" class="meta-value">—</span></span>
-          <span class="meta-item"><span class="meta-label">Tasks</span><span id="meta-count" class="meta-value">—</span></span>
+          <span class="meta-item">
+            <span class="meta-label">Project</span>
+            <span id="meta-name" class="meta-value">—</span>
+          </span>
+          <span class="meta-item">
+            <span class="meta-label">Start</span>
+            <span id="meta-start" class="meta-value">—</span>
+          </span>
+          <span class="meta-item">
+            <span class="meta-label">Finish</span>
+            <span id="meta-finish" class="meta-value">—</span>
+          </span>
+          <span class="meta-item">
+            <span class="meta-label">Tasks</span>
+            <span id="meta-count" class="meta-value">—</span>
+          </span>
         </div>
         <button id="open-another-btn" class="btn btn-secondary">Open another</button>
       </div>
 
-      <div class="table-wrapper">
-        <table id="task-table">
-          <thead>
-            <tr>
-              <th class="col-id">ID</th>
-              <th class="col-name">Name</th>
-              <th class="col-date">Start</th>
-              <th class="col-date">Finish</th>
-              <th class="col-dur">Duration</th>
-              <th class="col-pct">% Complete</th>
-            </tr>
-          </thead>
-          <tbody id="task-body"></tbody>
-        </table>
+      <!-- MS Project–style split layout -->
+      <div class="ms-layout">
+
+        <!-- Left: task table -->
+        <div class="ms-left" id="ms-left">
+          <table class="ms-table" id="task-table">
+            <thead>
+              <tr>
+                <th class="col-id">ID</th>
+                <th class="col-name">Task Name</th>
+                <th class="col-dur">Duration</th>
+                <th class="col-date">Start</th>
+                <th class="col-date">Finish</th>
+                <th class="col-pct">% Done</th>
+              </tr>
+            </thead>
+            <tbody id="task-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Resize handle -->
+        <div class="ms-splitter" id="ms-splitter"></div>
+
+        <!-- Right: Gantt chart -->
+        <div class="ms-right" id="ms-right">
+          <!-- Timeline header (scroll follows bars-wrap) -->
+          <div class="gantt-header-wrap" id="gantt-header-wrap">
+            <div id="gantt-header" class="gantt-header"></div>
+          </div>
+          <!-- Bars (main scroll driver) -->
+          <div class="gantt-bars-wrap" id="gantt-bars-wrap">
+            <div id="gantt-bars" class="gantt-bars"></div>
+          </div>
+        </div>
+
       </div>
     </section>
+
   </main>
 
   <script type="module" src="mpp-viewer.js"></script>
