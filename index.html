@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MPP Viewer</title>
+  <title>MPP File Viewer v1.1.0</title>
   <link rel="stylesheet" href="mpp-viewer.css" />
 </head>
 <body>
   <header>
-    <div class="logo">MPP Viewer</div>
-    <div class="subtitle">Microsoft Project file viewer — 100% client-side</div>
+    <div class="logo">MPP File Viewer <span class="version">v1.1.0</span></div>
+    <div class="subtitle">Microsoft Project XML viewer — 100% client-side, no upload</div>
   </header>
 
   <main>
@@ -23,16 +23,17 @@
         aria-label="Drop zone for MPP files"
       >
         <div class="drop-icon">&#128196;</div>
-        <p class="drop-primary">Drop your <strong>.mpp</strong> file here</p>
+        <p class="drop-primary">Drop your <strong>MS Project XML</strong> file here</p>
         <p class="drop-secondary">or</p>
         <label class="file-label" for="file-input">Browse file</label>
         <input
           id="file-input"
           type="file"
-          accept=".mpp,.MPP"
-          aria-label="Select MPP file"
+          accept=".xml,.mpp,.MPP,.XML"
+          aria-label="Select MS Project XML file"
         />
         <p class="drop-note">No upload — files are processed entirely in your browser</p>
+        <p class="drop-hint">In Microsoft Project: <strong>File → Save As → XML Format (*.xml)</strong></p>
       </div>
     </section>
 
@@ -48,7 +49,7 @@
     <section id="error-section" class="state-section hidden">
       <div class="error-box">
         <div class="error-icon">&#9888;</div>
-        <p id="error-message">Could not read the file.</p>
+        <pre id="error-message">Could not read the file.</pre>
         <button id="try-again-btn" class="btn">Try again</button>
       </div>
     </section>
