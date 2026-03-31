@@ -140,24 +140,35 @@ function parseMspdiXml(xmlText) {
     })
     .filter(t => !(t.id === 0 && !t.name));
 
+  // Compute parentUID for each task using document order + outline levels.
+  // This must happen here while tasks are still in document/outline order.
+  {
+    const pStack = []; // { uid, outline }
+    for (const task of tasks) {
+      while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) {
+        pStack.pop();
+      }
+      task.parentUID = pStack.length > 0 ? pStack[pStack.length - 1].uid : null;
+      pStack.push({ uid: task.uid, outline: task.outline });
+    }
+  }
+
   return { projName, projStart, projFinish, tasks };
 }
 
 // ─── Collapse filter ──────────────────────────────────────────────────────────
+// Uses stored parentUID references so it's immune to filter gaps or level jumps.
 function collapseFilter(tasks) {
   if (state.collapsedSummaries.size === 0) return tasks;
-  const result = [];
-  const stack = []; // outline levels of active collapsed summaries
-  for (const task of tasks) {
-    // Pop entries where we've moved back out of their nesting level
-    while (stack.length > 0 && task.outline <= stack[stack.length - 1]) stack.pop();
-    if (stack.length > 0) continue; // hidden inside a collapsed summary
-    result.push(task);
-    if (task.isSummary && state.collapsedSummaries.has(task.uid)) {
-      stack.push(task.outline);
+  return tasks.filter(task => {
+    let uid = task.parentUID;
+    while (uid != null) {
+      if (state.collapsedSummaries.has(uid)) return false;
+      const p = state.uidToTask[uid];
+      uid = p ? p.parentUID : null;
     }
-  }
-  return result;
+    return true;
+  });
 }
 
 // ─── Filter logic ─────────────────────────────────────────────────────────────
