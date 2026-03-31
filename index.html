@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MPP File Viewer v1.3.0</title>
+  <title>MPP File Viewer v1.4.0</title>
   <link rel="stylesheet" href="mpp-viewer.css" />
 </head>
 <body>
   <header>
-    <div class="logo">MPP File Viewer <span class="version">v1.3.0</span></div>
+    <div class="logo">MPP File Viewer <span class="version">v1.4.0</span></div>
     <div class="subtitle">Microsoft Project XML viewer — 100% client-side, no upload</div>
+    <div class="header-actions">
+      <button id="btn-theme" class="tb-btn theme-btn" title="Toggle light/dark mode">☾</button>
+    </div>
   </header>
 
   <main>
@@ -72,7 +75,7 @@
         <button id="open-another-btn" class="btn btn-secondary">Open another</button>
       </div>
 
-      <!-- Toolbar: filters + links toggle + zoom -->
+      <!-- Toolbar: filters + links toggle + columns + zoom -->
       <div class="toolbar">
         <!-- Filters -->
         <div class="toolbar-group">
@@ -105,6 +108,23 @@
 
         <div class="toolbar-sep"></div>
 
+        <!-- Column picker -->
+        <div class="toolbar-group col-picker-wrap">
+          <button id="btn-cols" class="tb-btn" title="Show/hide columns">Columns ▾</button>
+          <div id="col-picker" class="col-picker hidden">
+            <label><input type="checkbox" data-col="uid"    checked /> UID</label>
+            <label><input type="checkbox" data-col="dur"    checked /> Duration</label>
+            <label><input type="checkbox" data-col="start"  checked /> Start</label>
+            <label><input type="checkbox" data-col="finish" checked /> Finish</label>
+            <label><input type="checkbox" data-col="pct"    checked /> % Done</label>
+            <label><input type="checkbox" data-col="pred"   checked /> Predecessors</label>
+            <label><input type="checkbox" data-col="succ"   checked /> Successors</label>
+            <label><input type="checkbox" data-col="res"    checked /> Resources</label>
+          </div>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
         <!-- Zoom -->
         <div class="toolbar-group">
           <button id="btn-zoom-out" class="tb-btn" title="Zoom out (or Ctrl+scroll)">−</button>
@@ -123,11 +143,15 @@
             <thead>
               <tr>
                 <th class="col-id">ID</th>
+                <th class="col-uid">UID</th>
                 <th class="col-name">Task Name</th>
                 <th class="col-dur">Duration</th>
-                <th class="col-date">Start</th>
-                <th class="col-date">Finish</th>
-                <th class="col-pct">% Done</th>
+                <th class="col-start">Start</th>
+                <th class="col-finish">Finish</th>
+                <th class="col-pct">%</th>
+                <th class="col-pred">Predecessors</th>
+                <th class="col-succ">Successors</th>
+                <th class="col-res">Resources</th>
               </tr>
             </thead>
             <tbody id="task-body"></tbody>

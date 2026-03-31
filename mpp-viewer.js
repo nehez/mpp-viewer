@@ -3,19 +3,20 @@ const ROW_H    = 32;
 const HEADER_H = 36;
 const BAR_H    = 18;
 const BAR_TOP  = (ROW_H - BAR_H) / 2;
-const LINK_M   = 10;  // routing margin for link arrows
+const LINK_M   = 10;
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 const state = {
-  allTasks:      [],
-  filteredTasks: [],
-  uidToTask:     {},   // uid → task
+  allTasks:          [],
+  filteredTasks:     [],
+  uidToTask:         {},
   minD: null, maxD: null,
-  pxPerDay:   8,
-  showLinks:  true,
-  filterText:   '',
-  filterStatus: 'all',  // all | not-started | in-progress | complete
-  filterType:   'all',  // all | normal | summary | milestone
+  pxPerDay:          8,
+  showLinks:         true,
+  filterText:        '',
+  filterStatus:      'all',
+  filterType:        'all',
+  collapsedSummaries: new Set(),
 };
 
 // ─── State machine ────────────────────────────────────────────────────────────
@@ -63,13 +64,17 @@ function parseDate(iso) {
 function dayDiff(a, b) { return Math.floor((b - a) / 86400000); }
 
 function zoomLabel(px) {
-  if (px < 2)  return 'Years';
-  if (px < 4)  return 'Half Year';
-  if (px < 7)  return 'Quarter';
-  if (px < 15) return 'Month';
-  if (px < 25) return '2 Weeks';
-  if (px < 40) return 'Week';
-  return 'Day';
+  if (px < 0.15) return 'Decade+';
+  if (px < 0.35) return 'Decade';
+  if (px < 0.6)  return '5 Years';
+  if (px < 1)    return 'Years';
+  if (px < 2)    return 'Half Year';
+  if (px < 4)    return 'Quarter';
+  if (px < 7)    return 'Month';
+  if (px < 15)   return '2 Weeks';
+  if (px < 25)   return 'Week';
+  if (px < 40)   return 'Day';
+  return 'Hours';
 }
 
 // ─── MSPDI XML parser ─────────────────────────────────────────────────────────
@@ -85,21 +90,40 @@ function parseMspdiXml(xmlText) {
   const projStart  = getText(proj, 'StartDate') || getText(proj, 'Start') || '';
   const projFinish = getText(proj, 'FinishDate') || getText(proj, 'Finish') || '';
 
+  // Build resource UID → name map
+  const resourceMap = {};
+  Array.from(doc.querySelectorAll('Resources > Resource')).forEach(r => {
+    const uid  = parseInt(getText(r, 'UID') || '0');
+    const name = getText(r, 'Name');
+    if (uid > 0 && name) resourceMap[uid] = name;
+  });
+
+  // Build task UID → resource names
+  const taskResMap = {};
+  Array.from(doc.querySelectorAll('Assignments > Assignment')).forEach(a => {
+    const tuid = parseInt(getText(a, 'TaskUID') || '0');
+    const ruid = parseInt(getText(a, 'ResourceUID') || '0');
+    if (tuid > 0 && ruid > 0 && resourceMap[ruid]) {
+      if (!taskResMap[tuid]) taskResMap[tuid] = [];
+      taskResMap[tuid].push(resourceMap[ruid]);
+    }
+  });
+
   const taskEls = Array.from(doc.querySelectorAll('Task'));
   if (!taskEls.length) throw new Error('No tasks found. Make sure this is an MSPDI XML export from Microsoft Project.');
 
   const tasks = taskEls
     .map(t => {
-      // Parse predecessor links for this task
+      const uid = parseInt(getText(t, 'UID') || '0');
       const links = Array.from(t.querySelectorAll('PredecessorLink')).map(pl => ({
         predUID: parseInt(getText(pl, 'PredecessorUID') || '0'),
-        type:    parseInt(getText(pl, 'Type')           || '1'),  // 0=FF,1=FS,2=SF,3=SS
+        type:    parseInt(getText(pl, 'Type')           || '1'),
         lag:     parseInt(getText(pl, 'LinkLag')        || '0'),
       })).filter(l => l.predUID > 0);
 
       return {
-        uid:         parseInt(getText(t, 'UID')  || '0'),
-        id:          parseInt(getText(t, 'ID')   || '0'),
+        uid,
+        id:          parseInt(getText(t, 'ID') || '0'),
         name:        getText(t, 'Name'),
         start:       getText(t, 'Start'),
         finish:      getText(t, 'Finish'),
@@ -109,6 +133,9 @@ function parseMspdiXml(xmlText) {
         isSummary:   getText(t, 'Summary')   === '1',
         isMilestone: getText(t, 'Milestone') === '1',
         links,
+        resources:   (taskResMap[uid] || []).join('; '),
+        predStr:     '',
+        succStr:     '',
       };
     })
     .filter(t => !(t.id === 0 && !t.name));
@@ -116,17 +143,34 @@ function parseMspdiXml(xmlText) {
   return { projName, projStart, projFinish, tasks };
 }
 
+// ─── Collapse filter ──────────────────────────────────────────────────────────
+function collapseFilter(tasks) {
+  if (state.collapsedSummaries.size === 0) return tasks;
+  const result = [];
+  const stack = []; // outline levels of active collapsed summaries
+  for (const task of tasks) {
+    // Pop entries where we've moved back out of their nesting level
+    while (stack.length > 0 && task.outline <= stack[stack.length - 1]) stack.pop();
+    if (stack.length > 0) continue; // hidden inside a collapsed summary
+    result.push(task);
+    if (task.isSummary && state.collapsedSummaries.has(task.uid)) {
+      stack.push(task.outline);
+    }
+  }
+  return result;
+}
+
 // ─── Filter logic ─────────────────────────────────────────────────────────────
 function applyFilters() {
   const { filterText, filterStatus, filterType } = state;
   const q = filterText.trim().toLowerCase();
 
-  state.filteredTasks = state.allTasks.filter(t => {
+  const baseFiltered = state.allTasks.filter(t => {
     if (q && !t.name.toLowerCase().includes(q)) return false;
     switch (filterStatus) {
-      case 'not-started':  if (t.pct !== 0) return false; break;
-      case 'in-progress':  if (t.pct === 0 || t.pct >= 100) return false; break;
-      case 'complete':     if (t.pct < 100) return false; break;
+      case 'not-started': if (t.pct !== 0) return false; break;
+      case 'in-progress': if (t.pct === 0 || t.pct >= 100) return false; break;
+      case 'complete':    if (t.pct < 100) return false; break;
     }
     switch (filterType) {
       case 'normal':    if (t.isSummary || t.isMilestone) return false; break;
@@ -135,6 +179,8 @@ function applyFilters() {
     }
     return true;
   });
+
+  state.filteredTasks = collapseFilter(baseFiltered);
 
   const total = state.allTasks.length;
   const shown = state.filteredTasks.length;
@@ -150,51 +196,52 @@ function renderTable(tasks) {
   const tbody = document.getElementById('task-body');
   tbody.innerHTML = '';
   for (const task of tasks) {
-    const pct    = Math.min(100, Math.max(0, task.pct || 0));
-    const indent = Math.max(0, task.outline - 1) * 14;
+    const indent      = Math.max(0, task.outline - 1) * 14;
+    const isCollapsed = task.isSummary && state.collapsedSummaries.has(task.uid);
+    const chevron     = task.isSummary
+      ? `<span class="chevron">${isCollapsed ? '▶' : '▼'}</span>`
+      : '<span class="chevron"></span>';
+
     const tr = document.createElement('tr');
+    tr.dataset.uid = task.uid;
     if (task.isSummary)   tr.classList.add('summary');
     if (task.isMilestone) tr.classList.add('milestone');
-    tr.innerHTML = `
-      <td class="col-id">${task.id}</td>
-      <td class="col-name"><span class="task-name" style="padding-left:${indent}px">${escapeHtml(task.name)}</span></td>
-      <td class="col-dur">${formatDuration(task.duration)}</td>
-      <td class="col-date">${formatDate(task.start)}</td>
-      <td class="col-date">${formatDate(task.finish)}</td>
-      <td class="col-pct">
-        <div class="progress-wrap">
-          <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-          <span class="progress-label">${pct}%</span>
-        </div>
-      </td>`;
+
+    tr.innerHTML =
+      `<td class="col-id">${task.id}</td>` +
+      `<td class="col-uid">${task.uid}</td>` +
+      `<td class="col-name"><span class="task-name" style="padding-left:${indent}px">${chevron}${escapeHtml(task.name)}</span></td>` +
+      `<td class="col-dur">${formatDuration(task.duration)}</td>` +
+      `<td class="col-start">${formatDate(task.start)}</td>` +
+      `<td class="col-finish">${formatDate(task.finish)}</td>` +
+      `<td class="col-pct">${task.pct}%</td>` +
+      `<td class="col-pred">${escapeHtml(task.predStr)}</td>` +
+      `<td class="col-succ">${escapeHtml(task.succStr)}</td>` +
+      `<td class="col-res">${escapeHtml(task.resources)}</td>`;
+
     tbody.appendChild(tr);
   }
 }
 
 // ─── Gantt: dependency arrow SVG ──────────────────────────────────────────────
 function buildLinkPath(fx, fy, tx, ty, type) {
-  // FS (1): pred.right → succ.left — most common
   if (type === 1) {
     if (tx > fx + 2) {
       const mid = Math.round((fx + tx) / 2);
       return `M${fx},${fy} H${mid} V${ty} H${tx}`;
     }
-    // wrap around when successor starts before predecessor finishes
     const dir  = fy <= ty ? 1 : -1;
     const elby = Math.round(fy + dir * ROW_H * 0.65);
     return `M${fx},${fy} H${fx+LINK_M} V${elby} H${tx-LINK_M} V${ty} H${tx}`;
   }
-  // FF (0): pred.right → succ.right  (exit right, arrive from right → last segment goes left)
   if (type === 0) {
     const rx = Math.max(fx, tx) + LINK_M;
     return `M${fx},${fy} H${rx} V${ty} H${tx}`;
   }
-  // SS (3): pred.left → succ.left   (exit left, arrive from left → last segment goes right)
   if (type === 3) {
     const lx = Math.min(fx, tx) - LINK_M;
     return `M${fx},${fy} H${lx} V${ty} H${tx}`;
   }
-  // SF (2): pred.left → succ.right
   const rx = Math.max(fx, tx) + LINK_M;
   return `M${fx},${fy} H${rx} V${ty} H${tx}`;
 }
@@ -207,7 +254,6 @@ function drawLinksSvg(tasks, uidToRow, totalW, totalH) {
     `position:absolute;top:0;left:0;width:${totalW}px;height:${totalH}px;` +
     `pointer-events:none;overflow:visible;z-index:5`;
 
-  // Arrowhead marker (orient=auto follows last path segment direction)
   const defs = document.createElementNS(NS, 'defs');
   defs.innerHTML =
     `<marker id="gantt-ah" markerWidth="8" markerHeight="6"` +
@@ -221,7 +267,6 @@ function drawLinksSvg(tasks, uidToRow, totalW, totalH) {
     for (const link of (task.links || [])) {
       const pred = state.uidToTask[link.predUID];
       if (!pred) continue;
-
       const predIdx = uidToRow[pred.uid];
       const succIdx = uidToRow[task.uid];
       if (predIdx === undefined || succIdx === undefined) continue;
@@ -237,13 +282,12 @@ function drawLinksSvg(tasks, uidToRow, totalW, totalH) {
       const pY = Math.round(predIdx * ROW_H + ROW_H / 2);
       const sY = Math.round(succIdx * ROW_H + ROW_H / 2);
 
-      // Source/target x per link type
       let fx, tx;
       switch (link.type) {
-        case 0: fx = pR; tx = sR; break;  // FF
-        case 1: fx = pR; tx = sL; break;  // FS
-        case 2: fx = pL; tx = sR; break;  // SF
-        case 3: fx = pL; tx = sL; break;  // SS
+        case 0: fx = pR; tx = sR; break;
+        case 1: fx = pR; tx = sL; break;
+        case 2: fx = pL; tx = sR; break;
+        case 3: fx = pL; tx = sL; break;
         default: continue;
       }
 
@@ -276,37 +320,100 @@ function redrawGantt() {
   const totalW    = Math.round(totalDays * pxPerDay);
   const totalH    = tasks.length * ROW_H;
 
-  // ── Timeline header ──
+  // ── Timeline header (adaptive granularity) ──
   headerEl.style.width = totalW + 'px';
-  let cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
-  while (cur <= maxD) {
-    const y = cur.getFullYear(), mo = cur.getMonth();
-    const daysInMo = new Date(y, mo + 1, 0).getDate();
-    const cell = document.createElement('div');
-    cell.className  = 'gh-month';
-    cell.style.width = Math.round(daysInMo * pxPerDay) + 'px';
-    cell.textContent = cur.toLocaleString('default', { month: 'short', year: 'numeric' });
-    headerEl.appendChild(cell);
-    cur = new Date(y, mo + 1, 1);
+
+  if (pxPerDay >= 2) {
+    // Month-level header
+    let cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    while (cur <= maxD) {
+      const y = cur.getFullYear(), mo = cur.getMonth();
+      const daysInMo = new Date(y, mo + 1, 0).getDate();
+      const cell = document.createElement('div');
+      cell.className  = 'gh-month';
+      cell.style.width = Math.round(daysInMo * pxPerDay) + 'px';
+      cell.textContent = cur.toLocaleString('default', { month: 'short', year: 'numeric' });
+      headerEl.appendChild(cell);
+      cur = new Date(y, mo + 1, 1);
+    }
+  } else if (pxPerDay >= 0.4) {
+    // Quarter-level header
+    let cur = new Date(minD.getFullYear(), Math.floor(minD.getMonth() / 3) * 3, 1);
+    while (cur <= maxD) {
+      const y = cur.getFullYear(), q = Math.floor(cur.getMonth() / 3);
+      const endMo = q * 3 + 3;
+      const nextQ = new Date(y, endMo, 1);
+      const daysInQ = dayDiff(cur, nextQ);
+      const cell = document.createElement('div');
+      cell.className  = 'gh-month';
+      cell.style.width = Math.round(daysInQ * pxPerDay) + 'px';
+      cell.textContent = `Q${q + 1} ${y}`;
+      headerEl.appendChild(cell);
+      cur = nextQ;
+    }
+  } else {
+    // Year-level header
+    let cur = new Date(minD.getFullYear(), 0, 1);
+    while (cur <= maxD) {
+      const y = cur.getFullYear();
+      const nextY = new Date(y + 1, 0, 1);
+      const daysInY = dayDiff(cur, nextY);
+      const cell = document.createElement('div');
+      cell.className  = 'gh-month';
+      cell.style.width = Math.round(daysInY * pxPerDay) + 'px';
+      cell.textContent = String(y);
+      headerEl.appendChild(cell);
+      cur = nextY;
+    }
   }
 
   // ── Canvas ──
   barsEl.style.width  = totalW + 'px';
   barsEl.style.height = Math.max(totalH, 1) + 'px';
 
-  // Month grid lines
-  let dayOff = 0;
-  cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
-  while (cur <= maxD) {
-    const y = cur.getFullYear(), mo = cur.getMonth();
-    if (dayOff > 0) {
-      const ln = document.createElement('div');
-      ln.className  = 'gantt-vline';
-      ln.style.left = Math.round(dayOff * pxPerDay) + 'px';
-      barsEl.appendChild(ln);
+  // Vertical grid lines (adaptive)
+  if (pxPerDay >= 2) {
+    // Month vlines
+    let dayOff = 0;
+    let cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    while (cur <= maxD) {
+      const y = cur.getFullYear(), mo = cur.getMonth();
+      if (dayOff > 0) {
+        const ln = document.createElement('div');
+        ln.className  = 'gantt-vline';
+        ln.style.left = Math.round(dayOff * pxPerDay) + 'px';
+        barsEl.appendChild(ln);
+      }
+      dayOff += new Date(y, mo + 1, 0).getDate();
+      cur = new Date(y, mo + 1, 1);
     }
-    dayOff += new Date(y, mo + 1, 0).getDate();
-    cur = new Date(y, mo + 1, 1);
+  } else if (pxPerDay >= 0.4) {
+    // Quarter vlines
+    let cur = new Date(minD.getFullYear(), Math.floor(minD.getMonth() / 3) * 3, 1);
+    while (cur <= maxD) {
+      const y = cur.getFullYear(), q = Math.floor(cur.getMonth() / 3);
+      const off = dayDiff(minD, cur);
+      if (off > 0) {
+        const ln = document.createElement('div');
+        ln.className  = 'gantt-vline';
+        ln.style.left = Math.round(off * pxPerDay) + 'px';
+        barsEl.appendChild(ln);
+      }
+      cur = new Date(y, q * 3 + 3, 1);
+    }
+  } else {
+    // Year vlines
+    let cur = new Date(minD.getFullYear(), 0, 1);
+    while (cur <= maxD) {
+      const off = dayDiff(minD, cur);
+      if (off > 0) {
+        const ln = document.createElement('div');
+        ln.className  = 'gantt-vline';
+        ln.style.left = Math.round(off * pxPerDay) + 'px';
+        barsEl.appendChild(ln);
+      }
+      cur = new Date(cur.getFullYear() + 1, 0, 1);
+    }
   }
 
   // Today line
@@ -318,7 +425,7 @@ function redrawGantt() {
     barsEl.appendChild(tl);
   }
 
-  // Build UID→row-index map (only for filtered tasks)
+  // Build UID→row-index map
   const uidToRow = {};
   tasks.forEach((t, i) => { uidToRow[t.uid] = i; });
 
@@ -359,11 +466,10 @@ function redrawGantt() {
     barsEl.appendChild(drawLinksSvg(tasks, uidToRow, totalW, Math.max(totalH, 1)));
   }
 
-  // Update zoom label
   document.getElementById('zoom-label').textContent = zoomLabel(pxPerDay);
 }
 
-// ─── Scroll sync (one-time setup per file load) ───────────────────────────────
+// ─── Scroll sync ──────────────────────────────────────────────────────────────
 let _scrollAbort = null;
 function setupScrollSync() {
   if (_scrollAbort) _scrollAbort.abort();
@@ -378,8 +484,8 @@ function setupScrollSync() {
   barsWrap.addEventListener('scroll', () => {
     if (busy) return; busy = true;
     requestAnimationFrame(() => {
-      leftPanel.scrollTop    = barsWrap.scrollTop;
-      headerWrap.scrollLeft  = barsWrap.scrollLeft;
+      leftPanel.scrollTop   = barsWrap.scrollTop;
+      headerWrap.scrollLeft = barsWrap.scrollLeft;
       busy = false;
     });
   }, { signal: sig });
@@ -397,12 +503,11 @@ function setupScrollSync() {
     });
   }, { signal: sig });
 
-  // Ctrl+Scroll zoom on the gantt area
   barsWrap.addEventListener('wheel', e => {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.35 : 1 / 1.35;
-    state.pxPerDay = Math.max(1, Math.min(80, state.pxPerDay * factor));
+    state.pxPerDay = Math.max(0.05, Math.min(80, state.pxPerDay * factor));
     redrawGantt();
   }, { passive: false, signal: sig });
 }
@@ -411,6 +516,28 @@ function setupScrollSync() {
 function renderResults({ projName, projStart, projFinish, tasks }) {
   state.allTasks  = tasks;
   state.uidToTask = Object.fromEntries(tasks.map(t => [t.uid, t]));
+
+  // Build predecessor display strings
+  for (const task of tasks) {
+    task.predStr = task.links.map(l => {
+      const pred = state.uidToTask[l.predUID];
+      const predId = pred ? pred.id : l.predUID;
+      const typeName = ['FF','FS','SF','SS'][l.type] ?? 'FS';
+      return typeName === 'FS' ? String(predId) : `${predId}${typeName}`;
+    }).join(',');
+    task.succStr = '';
+  }
+
+  // Build successor display strings
+  for (const task of tasks) {
+    for (const link of task.links) {
+      const pred = state.uidToTask[link.predUID];
+      if (!pred) continue;
+      const typeName = ['FF','FS','SF','SS'][link.type] ?? 'FS';
+      const entry = typeName === 'FS' ? String(task.id) : `${task.id}${typeName}`;
+      pred.succStr = pred.succStr ? pred.succStr + ',' + entry : entry;
+    }
+  }
 
   // Compute date range
   let minD = null, maxD = null;
@@ -423,8 +550,7 @@ function renderResults({ projName, projStart, projFinish, tasks }) {
     state.minD = new Date(minD.getFullYear(), minD.getMonth(), 1);
     state.maxD = new Date(maxD.getFullYear(), maxD.getMonth() + 1, 0);
     const totalDays = dayDiff(state.minD, state.maxD) + 1;
-    // Auto-fit zoom to ~900px
-    state.pxPerDay = Math.max(1.5, Math.min(40, 900 / totalDays));
+    state.pxPerDay = Math.max(0.05, Math.min(40, 900 / totalDays));
   } else {
     state.minD = state.maxD = null;
     state.pxPerDay = 8;
@@ -436,18 +562,19 @@ function renderResults({ projName, projStart, projFinish, tasks }) {
   document.getElementById('meta-finish').textContent = formatDate(projFinish);
   document.getElementById('meta-count').textContent  = tasks.length;
 
-  // Reset filters & links toggle UI
+  // Reset filters & collapsed state
   state.filterText   = '';
   state.filterStatus = 'all';
   state.filterType   = 'all';
-  document.getElementById('filter-search').value  = '';
-  document.getElementById('filter-status').value  = 'all';
-  document.getElementById('filter-type').value    = 'all';
+  state.collapsedSummaries.clear();
+  document.getElementById('filter-search').value = '';
+  document.getElementById('filter-status').value = 'all';
+  document.getElementById('filter-type').value   = 'all';
   state.showLinks = true;
   document.getElementById('btn-links').classList.add('active');
 
   setupScrollSync();
-  applyFilters();   // populates filteredTasks, renders table + gantt
+  applyFilters();
   setState('results');
 }
 
@@ -479,7 +606,8 @@ async function handleFile(file) {
     const head = await readAsBytes(file.slice(0, 4));
     if (isBinaryMpp(head)) {
       throw new Error(
-        'Binary .mpp files cannot be parsed directly in the browser.\n\n' +
+        'Binary .mpp files cannot be parsed in the browser — Microsoft has never\n' +
+        'published the .mpp format specification.\n\n' +
         'Export your project as XML from Microsoft Project:\n' +
         '  File → Save As → "XML Format (*.xml)"\n\nThen drop the .xml file here.'
       );
@@ -544,15 +672,65 @@ document.getElementById('btn-zoom-in').addEventListener('click', () => {
   state.pxPerDay = Math.min(80, state.pxPerDay * 1.5); redrawGantt();
 });
 document.getElementById('btn-zoom-out').addEventListener('click', () => {
-  state.pxPerDay = Math.max(1, state.pxPerDay / 1.5); redrawGantt();
+  state.pxPerDay = Math.max(0.05, state.pxPerDay / 1.5); redrawGantt();
 });
 document.getElementById('btn-zoom-fit').addEventListener('click', () => {
   const w = document.getElementById('gantt-bars-wrap').clientWidth || 900;
   if (state.minD && state.maxD) {
-    state.pxPerDay = Math.max(1, w / (dayDiff(state.minD, state.maxD) + 1));
+    state.pxPerDay = w / (dayDiff(state.minD, state.maxD) + 1);
     redrawGantt();
   }
 });
+
+// Collapse/expand summary rows (event delegation)
+document.getElementById('task-body').addEventListener('click', e => {
+  const tr = e.target.closest('tr.summary');
+  if (!tr) return;
+  const uid = parseInt(tr.dataset.uid);
+  if (isNaN(uid)) return;
+  if (state.collapsedSummaries.has(uid)) {
+    state.collapsedSummaries.delete(uid);
+  } else {
+    state.collapsedSummaries.add(uid);
+  }
+  applyFilters();
+});
+
+// Column picker
+const colPicker = document.getElementById('col-picker');
+document.getElementById('btn-cols').addEventListener('click', e => {
+  e.stopPropagation();
+  colPicker.classList.toggle('hidden');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.col-picker-wrap')) colPicker.classList.add('hidden');
+});
+colPicker.addEventListener('change', e => {
+  const col = e.target.dataset.col;
+  if (!col) return;
+  document.getElementById('task-table').classList.toggle(`hide-${col}`, !e.target.checked);
+});
+
+// Light/dark theme toggle
+(function () {
+  const btn = document.getElementById('btn-theme');
+  if (localStorage.getItem('mpp-theme') === 'light') {
+    document.documentElement.dataset.theme = 'light';
+    btn.textContent = '☀';
+  }
+  btn.addEventListener('click', () => {
+    const isLight = document.documentElement.dataset.theme === 'light';
+    if (isLight) {
+      delete document.documentElement.dataset.theme;
+      btn.textContent = '☾';
+      localStorage.removeItem('mpp-theme');
+    } else {
+      document.documentElement.dataset.theme = 'light';
+      btn.textContent = '☀';
+      localStorage.setItem('mpp-theme', 'light');
+    }
+  });
+})();
 
 // ─── Splitter drag ────────────────────────────────────────────────────────────
 (function () {
@@ -568,7 +746,7 @@ document.getElementById('btn-zoom-fit').addEventListener('click', () => {
   });
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    msLeft.style.width = Math.max(160, Math.min(1000, startW + e.clientX - startX)) + 'px';
+    msLeft.style.width = Math.max(160, Math.min(1400, startW + e.clientX - startX)) + 'px';
   });
   document.addEventListener('mouseup', () => {
     if (!dragging) return; dragging = false;
