@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MPP File Viewer v1.2.0</title>
+  <title>MPP File Viewer v1.3.0</title>
   <link rel="stylesheet" href="mpp-viewer.css" />
 </head>
 <body>
   <header>
-    <div class="logo">MPP File Viewer <span class="version">v1.2.0</span></div>
+    <div class="logo">MPP File Viewer <span class="version">v1.3.0</span></div>
     <div class="subtitle">Microsoft Project XML viewer — 100% client-side, no upload</div>
   </header>
 
@@ -30,7 +30,7 @@
     </section>
 
     <!-- ── Loading state ── -->
-    <section id="loading-section" class="state-section hidden">
+    <section id="loading-section" class="state-section">
       <div class="loading-box">
         <div class="spinner" aria-label="Loading"></div>
         <p>Parsing project file…</p>
@@ -38,7 +38,7 @@
     </section>
 
     <!-- ── Error state ── -->
-    <section id="error-section" class="state-section hidden">
+    <section id="error-section" class="state-section">
       <div class="error-box">
         <div class="error-icon">&#9888;</div>
         <pre id="error-message">Could not read the file.</pre>
@@ -47,7 +47,7 @@
     </section>
 
     <!-- ── Results state ── -->
-    <section id="results-section" class="state-section hidden">
+    <section id="results-section" class="state-section">
 
       <!-- Project info bar -->
       <div class="project-bar">
@@ -70,6 +70,48 @@
           </span>
         </div>
         <button id="open-another-btn" class="btn btn-secondary">Open another</button>
+      </div>
+
+      <!-- Toolbar: filters + links toggle + zoom -->
+      <div class="toolbar">
+        <!-- Filters -->
+        <div class="toolbar-group">
+          <input  id="filter-search" class="filter-input" type="search"
+                  placeholder="Search tasks…" autocomplete="off" />
+          <select id="filter-status" class="filter-select">
+            <option value="all">All statuses</option>
+            <option value="not-started">Not started</option>
+            <option value="in-progress">In progress</option>
+            <option value="complete">Complete</option>
+          </select>
+          <select id="filter-type" class="filter-select">
+            <option value="all">All types</option>
+            <option value="normal">Normal tasks</option>
+            <option value="summary">Summary tasks</option>
+            <option value="milestone">Milestones</option>
+          </select>
+          <button id="btn-clear-filters" class="tb-btn" title="Clear all filters">✕ Clear</button>
+          <span id="filter-count" class="filter-count"></span>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- Links toggle -->
+        <div class="toolbar-group">
+          <button id="btn-links" class="tb-btn active" title="Toggle dependency arrows">
+            ↗ Links
+          </button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- Zoom -->
+        <div class="toolbar-group">
+          <button id="btn-zoom-out" class="tb-btn" title="Zoom out (or Ctrl+scroll)">−</button>
+          <button id="btn-zoom-fit" class="tb-btn" title="Fit timeline to window">Fit</button>
+          <button id="btn-zoom-in"  class="tb-btn" title="Zoom in (or Ctrl+scroll)">+</button>
+          <span id="zoom-label" class="zoom-label">Month</span>
+        </div>
       </div>
 
       <!-- MS Project–style split layout -->
@@ -97,11 +139,9 @@
 
         <!-- Right: Gantt chart -->
         <div class="ms-right" id="ms-right">
-          <!-- Timeline header (scroll follows bars-wrap) -->
           <div class="gantt-header-wrap" id="gantt-header-wrap">
             <div id="gantt-header" class="gantt-header"></div>
           </div>
-          <!-- Bars (main scroll driver) -->
           <div class="gantt-bars-wrap" id="gantt-bars-wrap">
             <div id="gantt-bars" class="gantt-bars"></div>
           </div>
