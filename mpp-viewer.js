@@ -240,8 +240,8 @@ function renderTable(tasks) {
       `<td class="col-start">${formatDate(task.start)}</td>` +
       `<td class="col-finish">${formatDate(task.finish)}</td>` +
       `<td class="col-pct">${task.pct}%</td>` +
-      `<td class="col-pred" title="${escapeHtml(task.predStr)}">${formatLinkHtml(task.predStr)}</td>` +
-      `<td class="col-succ" title="${escapeHtml(task.succStr)}">${formatLinkHtml(task.succStr)}</td>` +
+      `<td class="col-pred" data-val="${escapeHtml(task.predStr)}">${formatLinkHtml(task.predStr)}</td>` +
+      `<td class="col-succ" data-val="${escapeHtml(task.succStr)}">${formatLinkHtml(task.succStr)}</td>` +
       `<td class="col-res">${escapeHtml(task.resources)}</td>`;
 
     tbody.appendChild(tr);
@@ -265,26 +265,92 @@ function navigateToTaskId(id) {
   }
 }
 
-// ─── Export visible tasks to CSV ──────────────────────────────────────────────
-function exportCsv() {
-  const header = ['ID','UID','Task Name','Duration','Start','Finish','% Done','Predecessors','Successors','Resources'];
-  const rows   = state.filteredTasks.map(t => [
-    t.id, t.uid, t.name,
-    formatDuration(t.duration),
-    formatDate(t.start), formatDate(t.finish),
-    t.pct + '%',
-    t.predStr, t.succStr, t.resources,
-  ]);
-  const csv = [header, ...rows]
-    .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\r\n');
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+// ─── Export visible tasks as formatted Excel (HTML/XLS) ───────────────────────
+function exportExcel() {
+  const cols = ['ID','UID','Task Name','Duration','Start','Finish','% Done',
+                'Predecessors','Successors','Resources'];
+
+  const hdrStyle = 'background:#1E3A5F;color:#fff;font-weight:bold;border:1px solid #aaa;padding:5px 8px;white-space:nowrap';
+  const cellBase = 'border:1px solid #ddd;padding:4px 8px;white-space:nowrap';
+
+  let trs = '<tr>' + cols.map(c => `<th style="${hdrStyle}">${c}</th>`).join('') + '</tr>\n';
+
+  for (const t of state.filteredTasks) {
+    const indent  = Math.max(0, t.outline - 1);
+    const pad     = '\u00A0'.repeat(indent * 3);   // non-breaking spaces for indent
+    const bg      = t.isSummary  ? '#FFF8E1'
+                  : t.isMilestone ? '#EEF4FF'
+                  : '#FFFFFF';
+    const fw      = t.isSummary ? 'bold' : 'normal';
+    const opacity = t.isActive  ? '' : ';color:#999;text-decoration:line-through';
+
+    const rowStyle = `background:${bg}${opacity}`;
+    const td = (v, extra = '') =>
+      `<td style="${cellBase};${rowStyle}${extra}">${String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`;
+
+    trs += '<tr>' +
+      td(t.id,                        ';text-align:right;color:#888') +
+      td(t.uid,                       ';text-align:right;color:#888') +
+      td(pad + t.name,                `;font-weight:${fw}`) +
+      td(formatDuration(t.duration)) +
+      td(formatDate(t.start),         ';color:#555') +
+      td(formatDate(t.finish),        ';color:#555') +
+      td(t.pct + '%',                 ';text-align:right;color:#555') +
+      td(t.predStr,                   ';color:#555;font-family:monospace') +
+      td(t.succStr,                   ';color:#555;font-family:monospace') +
+      td(t.resources) +
+    '</tr>\n';
+  }
+
+  const sheetName = (state.projectName || 'Project').slice(0, 31)
+    .replace(/[[\]*?:/\\]/g, '_');
+
+  const html = [
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office"',
+    '      xmlns:x="urn:schemas-microsoft-com:office:excel"',
+    '      xmlns="http://www.w3.org/TR/REC-html40">',
+    '<head><meta charset="UTF-8">',
+    '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>',
+    `<x:ExcelWorksheet><x:Name>${sheetName}</x:Name>`,
+    '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>',
+    '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->',
+    '<style>table{border-collapse:collapse}body{font-family:Calibri,Arial,sans-serif;font-size:11pt}</style>',
+    '</head><body>',
+    '<table>',
+    trs,
+    '</table></body></html>',
+  ].join('\n');
+
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
-  a.download = state.projectName.replace(/[/\\?%*:|"<>]/g, '_') + '.csv';
+  a.download = (state.projectName || 'project').replace(/[/\\?%*:|"<>]/g, '_') + '.xls';
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+// ─── Pred/succ overflow popover ───────────────────────────────────────────────
+const linkPopover = document.getElementById('link-popover');
+
+function showLinkPopover(anchorEl, valStr) {
+  if (!valStr) return;
+  linkPopover.innerHTML = formatLinkHtml(valStr);
+  const r = anchorEl.getBoundingClientRect();
+  // Position below the cell; flip up if it would go off-screen
+  const top = r.bottom + 4;
+  linkPopover.style.left = r.left + 'px';
+  linkPopover.classList.remove('hidden');
+  // Measure after unhiding, then flip if needed
+  const ph = linkPopover.offsetHeight;
+  linkPopover.style.top = (top + ph > window.innerHeight ? r.top - ph - 4 : top) + 'px';
+}
+
+function hideLinkPopover() { linkPopover.classList.add('hidden'); }
+
+linkPopover.addEventListener('click', e => {
+  const link = e.target.closest('.task-link');
+  if (link) { navigateToTaskId(parseInt(link.dataset.id)); hideLinkPopover(); }
+});
 
 // ─── Gantt: dependency arrow SVG ──────────────────────────────────────────────
 function buildLinkPath(fx, fy, tx, ty, type) {
@@ -754,13 +820,21 @@ document.getElementById('btn-zoom-fit').addEventListener('click', () => {
   }
 });
 
-// Task table click — pred/succ navigation takes priority, then collapse
+// Task table click — popover > link navigation > collapse
 document.getElementById('task-body').addEventListener('click', e => {
-  // Pred/succ task-link click
+  // Inline task-link click (visible, not truncated)
   const link = e.target.closest('.task-link');
   if (link) {
     e.stopPropagation();
     navigateToTaskId(parseInt(link.dataset.id));
+    hideLinkPopover();
+    return;
+  }
+  // Pred/succ cell click → open popover with all links (handles truncated ones)
+  const cell = e.target.closest('.col-pred, .col-succ');
+  if (cell) {
+    const val = cell.dataset.val;
+    if (val) { e.stopPropagation(); showLinkPopover(cell, val); }
     return;
   }
   // Collapse/expand summary rows
@@ -784,6 +858,7 @@ document.getElementById('btn-cols').addEventListener('click', e => {
 });
 document.addEventListener('click', e => {
   if (!e.target.closest('.col-picker-wrap')) colPicker.classList.add('hidden');
+  if (!e.target.closest('.link-popover') && !e.target.closest('.col-pred, .col-succ')) hideLinkPopover();
 });
 colPicker.addEventListener('change', e => {
   const col = e.target.dataset.col;
@@ -817,7 +892,7 @@ colPicker.addEventListener('change', e => {
 })();
 
 // Export CSV button
-document.getElementById('btn-export').addEventListener('click', exportCsv);
+document.getElementById('btn-export').addEventListener('click', exportExcel);
 
 // ─── Splitter drag ────────────────────────────────────────────────────────────
 (function () {

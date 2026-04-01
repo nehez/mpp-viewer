@@ -90,8 +90,6 @@ main {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 1800px;
-  margin: 0 auto;
 }
 .hidden { display: none !important; }
 
@@ -349,6 +347,25 @@ html[data-theme="light"] .col-picker { box-shadow: 0 6px 20px rgba(0,0,0,.15); }
   color: var(--accent);
 }
 .task-link:hover { border-bottom-style: solid; }
+
+/* Pred/succ overflow popover */
+.link-popover {
+  position: fixed;
+  z-index: 200;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  font-size: 12px;
+  font-family: var(--mono);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  max-width: 320px;
+  line-height: 1.8;
+}
+.link-popover .task-link { font-size: 12px; }
 
 /* Row flash when navigated to */
 @keyframes row-flash {

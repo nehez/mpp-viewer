@@ -73,7 +73,7 @@
           </span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button id="btn-export" class="btn btn-secondary" title="Export visible tasks to CSV (opens in Excel)">⬇ Export CSV</button>
+          <button id="btn-export" class="btn btn-secondary" title="Export visible tasks to Excel (.xls) with formatting">⬇ Export Excel</button>
           <button id="open-another-btn" class="btn btn-secondary">Open another</button>
         </div>
       </div>
@@ -175,6 +175,9 @@
     </section>
 
   </main>
+
+  <!-- Shared popover for truncated pred/succ links -->
+  <div id="link-popover" class="link-popover hidden"></div>
 
   <script type="module" src="mpp-viewer.js"></script>
 </body>
