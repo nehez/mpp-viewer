@@ -837,19 +837,19 @@ document.getElementById('btn-clear-filters').addEventListener('click', () => {
   applyFilters();
 });
 
-// Tree picker (expand/collapse all dropdown)
-const treePicker = document.getElementById('tree-picker');
-document.getElementById('btn-tree').addEventListener('click', e => {
+// Outline picker (expand/collapse all dropdown)
+const outlinePicker = document.getElementById('outline-picker');
+document.getElementById('btn-outline').addEventListener('click', e => {
   e.stopPropagation();
-  treePicker.classList.toggle('hidden');
+  outlinePicker.style.display = outlinePicker.style.display === 'none' ? 'flex' : 'none';
 });
 document.getElementById('btn-expand-all').addEventListener('click', () => {
-  treePicker.classList.add('hidden');
+  outlinePicker.style.display = 'none';
   state.collapsedSummaries.clear();
   applyFilters();
 });
 document.getElementById('btn-collapse-all').addEventListener('click', () => {
-  treePicker.classList.add('hidden');
+  outlinePicker.style.display = 'none';
   state.allTasks.forEach(t => { if (t.isSummary) state.collapsedSummaries.add(t.uid); });
   applyFilters();
 });
@@ -904,10 +904,8 @@ document.getElementById('btn-cols').addEventListener('click', e => {
   colPicker.classList.toggle('hidden');
 });
 document.addEventListener('click', e => {
-  if (!e.target.closest('.col-picker-wrap')) {
-    colPicker.classList.add('hidden');
-    treePicker.classList.add('hidden');
-  }
+  if (!e.target.closest('.col-picker-wrap')) colPicker.classList.add('hidden');
+  if (!e.target.closest('#outline-picker-wrap')) outlinePicker.style.display = 'none';
 });
 colPicker.addEventListener('change', e => {
   const col = e.target.dataset.col;
