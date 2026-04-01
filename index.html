@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -72,18 +72,21 @@
             <span id="meta-count" class="meta-value">—</span>
           </span>
         </div>
-        <button id="open-another-btn" class="btn btn-secondary">Open another</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="btn-export" class="btn btn-secondary" title="Export visible tasks to CSV (opens in Excel)">⬇ Export CSV</button>
+          <button id="open-another-btn" class="btn btn-secondary">Open another</button>
+        </div>
       </div>
 
       <!-- Toolbar: filters + links toggle + columns + zoom -->
       <div class="toolbar">
-        <!-- Filters -->
+        <!-- Filters + column picker -->
         <div class="toolbar-group">
           <input  id="filter-search" class="filter-input" type="search"
                   placeholder="Search tasks…" autocomplete="off" />
           <select id="filter-status" class="filter-select">
             <option value="all">All statuses</option>
-            <option value="not-started">Not started</option>
+            <option value="not-started">Incomplete</option>
             <option value="in-progress">In progress</option>
             <option value="complete">Complete</option>
           </select>
@@ -93,6 +96,20 @@
             <option value="summary">Summary tasks</option>
             <option value="milestone">Milestones</option>
           </select>
+          <!-- Column picker lives here with the other dropdowns -->
+          <div class="col-picker-wrap">
+            <button id="btn-cols" class="tb-btn" title="Show/hide columns">Columns ▾</button>
+            <div id="col-picker" class="col-picker hidden">
+              <label><input type="checkbox" data-col="uid"    checked /> UID</label>
+              <label><input type="checkbox" data-col="dur"    checked /> Duration</label>
+              <label><input type="checkbox" data-col="start"  checked /> Start</label>
+              <label><input type="checkbox" data-col="finish" checked /> Finish</label>
+              <label><input type="checkbox" data-col="pct"    checked /> % Done</label>
+              <label><input type="checkbox" data-col="pred"   checked /> Predecessors</label>
+              <label><input type="checkbox" data-col="succ"   checked /> Successors</label>
+              <label><input type="checkbox" data-col="res"    checked /> Resources</label>
+            </div>
+          </div>
           <button id="btn-clear-filters" class="tb-btn" title="Clear all filters">✕ Clear</button>
           <span id="filter-count" class="filter-count"></span>
         </div>
@@ -104,23 +121,6 @@
           <button id="btn-links" class="tb-btn active" title="Toggle dependency arrows">
             ↗ Links
           </button>
-        </div>
-
-        <div class="toolbar-sep"></div>
-
-        <!-- Column picker -->
-        <div class="toolbar-group col-picker-wrap">
-          <button id="btn-cols" class="tb-btn" title="Show/hide columns">Columns ▾</button>
-          <div id="col-picker" class="col-picker hidden">
-            <label><input type="checkbox" data-col="uid"    checked /> UID</label>
-            <label><input type="checkbox" data-col="dur"    checked /> Duration</label>
-            <label><input type="checkbox" data-col="start"  checked /> Start</label>
-            <label><input type="checkbox" data-col="finish" checked /> Finish</label>
-            <label><input type="checkbox" data-col="pct"    checked /> % Done</label>
-            <label><input type="checkbox" data-col="pred"   checked /> Predecessors</label>
-            <label><input type="checkbox" data-col="succ"   checked /> Successors</label>
-            <label><input type="checkbox" data-col="res"    checked /> Resources</label>
-          </div>
         </div>
 
         <div class="toolbar-sep"></div>

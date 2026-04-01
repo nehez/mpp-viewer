@@ -17,6 +17,7 @@ const state = {
   filterStatus:      'all',
   filterType:        'all',
   collapsedSummaries: new Set(),
+  projectName: '',
 };
 
 // ─── State machine ────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ function parseMspdiXml(xmlText) {
         outline:     parseInt(getText(t, 'OutlineLevel') || '1'),
         isSummary:   getText(t, 'Summary')   === '1',
         isMilestone: getText(t, 'Milestone') === '1',
+        isActive:    getText(t, 'Active') !== '0',  // inactive when Active=0
         links,
         resources:   (taskResMap[uid] || []).join('; '),
         predStr:     '',
@@ -202,6 +204,17 @@ function applyFilters() {
   redrawGantt();
 }
 
+// ─── Pred/succ link formatter ─────────────────────────────────────────────────
+// Wraps each numeric ID in a clickable span; suffix (FF/SS/SF) stays plain text.
+function formatLinkHtml(str) {
+  if (!str) return '';
+  return str.split(',').map(part => {
+    const m = part.match(/^(\d+)((?:FF|FS|SF|SS)?)$/);
+    if (!m) return escapeHtml(part);
+    return `<span class="task-link" data-id="${m[1]}">${m[1]}</span>${escapeHtml(m[2])}`;
+  }).join('<span style="opacity:.5">,</span>');
+}
+
 // ─── Table renderer ───────────────────────────────────────────────────────────
 function renderTable(tasks) {
   const tbody = document.getElementById('task-body');
@@ -217,6 +230,7 @@ function renderTable(tasks) {
     tr.dataset.uid = task.uid;
     if (task.isSummary)   tr.classList.add('summary');
     if (task.isMilestone) tr.classList.add('milestone');
+    if (!task.isActive)   tr.classList.add('inactive');
 
     tr.innerHTML =
       `<td class="col-id">${task.id}</td>` +
@@ -226,12 +240,50 @@ function renderTable(tasks) {
       `<td class="col-start">${formatDate(task.start)}</td>` +
       `<td class="col-finish">${formatDate(task.finish)}</td>` +
       `<td class="col-pct">${task.pct}%</td>` +
-      `<td class="col-pred">${escapeHtml(task.predStr)}</td>` +
-      `<td class="col-succ">${escapeHtml(task.succStr)}</td>` +
+      `<td class="col-pred" title="${escapeHtml(task.predStr)}">${formatLinkHtml(task.predStr)}</td>` +
+      `<td class="col-succ" title="${escapeHtml(task.succStr)}">${formatLinkHtml(task.succStr)}</td>` +
       `<td class="col-res">${escapeHtml(task.resources)}</td>`;
 
     tbody.appendChild(tr);
   }
+}
+
+// ─── Navigate to task by ID ───────────────────────────────────────────────────
+function navigateToTaskId(id) {
+  const idx = state.filteredTasks.findIndex(t => t.id === id);
+  if (idx === -1) return;
+
+  const offset = Math.max(0, idx * ROW_H - ROW_H * 3);
+  document.getElementById('gantt-bars-wrap').scrollTop = offset;
+  document.getElementById('ms-left').scrollTop         = offset;
+
+  const rows = document.querySelectorAll('#task-body tr');
+  const tr   = rows[idx];
+  if (tr) {
+    tr.classList.add('navigate-flash');
+    tr.addEventListener('animationend', () => tr.classList.remove('navigate-flash'), { once: true });
+  }
+}
+
+// ─── Export visible tasks to CSV ──────────────────────────────────────────────
+function exportCsv() {
+  const header = ['ID','UID','Task Name','Duration','Start','Finish','% Done','Predecessors','Successors','Resources'];
+  const rows   = state.filteredTasks.map(t => [
+    t.id, t.uid, t.name,
+    formatDuration(t.duration),
+    formatDate(t.start), formatDate(t.finish),
+    t.pct + '%',
+    t.predStr, t.succStr, t.resources,
+  ]);
+  const csv = [header, ...rows]
+    .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = state.projectName.replace(/[/\\?%*:|"<>]/g, '_') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ─── Gantt: dependency arrow SVG ──────────────────────────────────────────────
@@ -442,8 +494,11 @@ function redrawGantt() {
 
   // Bar rows
   tasks.forEach((task, i) => {
+    const classes = ['gbar-row'];
+    if (task.isSummary) classes.push('summary');
+    if (!task.isActive) classes.push('inactive');
     const row = document.createElement('div');
-    row.className = 'gbar-row' + (task.isSummary ? ' summary' : '');
+    row.className = classes.join(' ');
     row.style.top = (i * ROW_H) + 'px';
 
     const s = parseDate(task.start), f = parseDate(task.finish);
@@ -458,13 +513,18 @@ function redrawGantt() {
         row.appendChild(d);
       } else {
         const bar = document.createElement('div');
-        bar.className  = 'gantt-bar' + (task.isSummary ? ' summary-bar' : '');
-        bar.style.cssText = `left:${left}px;width:${width}px;top:${BAR_TOP}px;height:${BAR_H}px`;
-        if (!task.isSummary && task.pct > 0) {
-          const done = document.createElement('div');
-          done.className = 'gantt-done';
-          done.style.width = Math.min(100, task.pct) + '%';
-          bar.appendChild(done);
+        bar.className = 'gantt-bar' + (task.isSummary ? ' summary-bar' : '');
+        if (task.isSummary) {
+          // Bracket-style summary bar: thin top strip + downward triangle endpoints via CSS
+          bar.style.cssText = `left:${left}px;width:${width}px;top:5px;height:5px`;
+        } else {
+          bar.style.cssText = `left:${left}px;width:${width}px;top:${BAR_TOP}px;height:${BAR_H}px`;
+          if (task.pct > 0) {
+            const done = document.createElement('div');
+            done.className = 'gantt-done';
+            done.style.width = Math.min(100, task.pct) + '%';
+            bar.appendChild(done);
+          }
         }
         row.appendChild(bar);
       }
@@ -525,8 +585,9 @@ function setupScrollSync() {
 
 // ─── Render results ───────────────────────────────────────────────────────────
 function renderResults({ projName, projStart, projFinish, tasks }) {
-  state.allTasks  = tasks;
-  state.uidToTask = Object.fromEntries(tasks.map(t => [t.uid, t]));
+  state.allTasks    = tasks;
+  state.projectName = projName || 'project';
+  state.uidToTask   = Object.fromEntries(tasks.map(t => [t.uid, t]));
 
   // Build predecessor display strings
   for (const task of tasks) {
@@ -693,8 +754,16 @@ document.getElementById('btn-zoom-fit').addEventListener('click', () => {
   }
 });
 
-// Collapse/expand summary rows (event delegation)
+// Task table click — pred/succ navigation takes priority, then collapse
 document.getElementById('task-body').addEventListener('click', e => {
+  // Pred/succ task-link click
+  const link = e.target.closest('.task-link');
+  if (link) {
+    e.stopPropagation();
+    navigateToTaskId(parseInt(link.dataset.id));
+    return;
+  }
+  // Collapse/expand summary rows
   const tr = e.target.closest('tr.summary');
   if (!tr) return;
   const uid = parseInt(tr.dataset.uid);
@@ -722,26 +791,33 @@ colPicker.addEventListener('change', e => {
   document.getElementById('task-table').classList.toggle(`hide-${col}`, !e.target.checked);
 });
 
-// Light/dark theme toggle
+// Light/dark theme toggle — default is light (set on <html> in index.html)
 (function () {
   const btn = document.getElementById('btn-theme');
-  if (localStorage.getItem('mpp-theme') === 'light') {
-    document.documentElement.dataset.theme = 'light';
+  // Restore explicit dark preference from previous session
+  if (localStorage.getItem('mpp-theme') === 'dark') {
+    document.documentElement.dataset.theme = 'dark';
     btn.textContent = '☀';
+  } else {
+    document.documentElement.dataset.theme = 'light';
+    btn.textContent = '☾';
   }
   btn.addEventListener('click', () => {
-    const isLight = document.documentElement.dataset.theme === 'light';
-    if (isLight) {
-      delete document.documentElement.dataset.theme;
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    if (isDark) {
+      document.documentElement.dataset.theme = 'light';
       btn.textContent = '☾';
       localStorage.removeItem('mpp-theme');
     } else {
-      document.documentElement.dataset.theme = 'light';
+      document.documentElement.dataset.theme = 'dark';
       btn.textContent = '☀';
-      localStorage.setItem('mpp-theme', 'light');
+      localStorage.setItem('mpp-theme', 'dark');
     }
   });
 })();
+
+// Export CSV button
+document.getElementById('btn-export').addEventListener('click', exportCsv);
 
 // ─── Splitter drag ────────────────────────────────────────────────────────────
 (function () {

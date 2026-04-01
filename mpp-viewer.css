@@ -342,6 +342,22 @@ html[data-theme="light"] .col-picker { box-shadow: 0 6px 20px rgba(0,0,0,.15); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 
+/* Clickable pred/succ task ID links */
+.task-link {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent);
+  color: var(--accent);
+}
+.task-link:hover { border-bottom-style: solid; }
+
+/* Row flash when navigated to */
+@keyframes row-flash {
+  0%   { background: var(--accent-dim); }
+  70%  { background: var(--accent-dim); }
+  100% { background: transparent; }
+}
+.ms-table tbody tr.navigate-flash td { animation: row-flash 1.4s ease forwards; }
+
 /* Collapse chevron */
 .chevron {
   display: inline-block;
@@ -405,11 +421,35 @@ tr.summary .chevron { color: var(--summary-text); }
   position: absolute; border-radius: 3px; background: var(--accent);
   overflow: hidden; z-index: 2;
 }
-.gantt-bar.summary-bar { background: var(--summary-text); border-radius: 2px; }
 .gantt-done {
   height: 100%; background: rgba(255,255,255,.28);
   border-radius: 3px 0 0 3px;
 }
+
+/* Summary bar — thin bracket with downward triangle endpoints */
+.gantt-bar.summary-bar {
+  background: var(--summary-text);
+  border-radius: 1px;
+  overflow: visible;  /* allow ::before/::after triangles to hang below */
+}
+.gantt-bar.summary-bar::before,
+.gantt-bar.summary-bar::after {
+  content: '';
+  position: absolute;
+  top: 5px;           /* flush with bottom of the 5px bar */
+  width: 0; height: 0;
+  border-left:  5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top:   7px solid var(--summary-text);
+}
+.gantt-bar.summary-bar::before { left:  -2px; }
+.gantt-bar.summary-bar::after  { right: -2px; }
+
+/* Inactive tasks */
+.ms-table tbody tr.inactive td        { opacity: 0.4; }
+.ms-table tbody tr.inactive .task-name { text-decoration: line-through; }
+.gbar-row.inactive .gantt-bar,
+.gbar-row.inactive .gantt-diamond     { opacity: 0.3; filter: saturate(0.2); }
 
 /* Milestone diamond */
 .gantt-diamond {
