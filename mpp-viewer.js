@@ -154,14 +154,21 @@ function parseMspdiXml(xmlText) {
     for (const task of tasks) {
       if (task.outlineNumber) {
         const dot = task.outlineNumber.lastIndexOf('.');
-        task.parentUID = dot > 0
-          ? (numToUID[task.outlineNumber.slice(0, dot)] ?? null)
-          : null;
+        if (dot > 0) {
+          // Multi-segment: "1.2.3" → parent is "1.2" via outlineNumber map
+          task.parentUID = numToUID[task.outlineNumber.slice(0, dot)] ?? null;
+        } else {
+          // Single-segment: "1", "2" — no dot means no outlineNumber parent.
+          // Use pStack so that a project-summary task at outline=0 (which has
+          // no outlineNumber itself) becomes the parent of outline=1 tasks.
+          while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) pStack.pop();
+          task.parentUID = pStack.length > 0 ? pStack[pStack.length - 1].uid : null;
+        }
       } else {
         while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) pStack.pop();
         task.parentUID = pStack.length > 0 ? pStack[pStack.length - 1].uid : null;
       }
-      // Keep pStack in sync for the fallback path
+      // Keep pStack in sync for all paths
       while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) pStack.pop();
       pStack.push({ uid: task.uid, outline: task.outline });
     }
@@ -289,7 +296,7 @@ function computeIsLastChild(tasks) {
 
 // Returns a box-drawing prefix like "│  ├─ " for a task.
 function buildTreeGuide(task, last) {
-  if (task.outline <= 1) return '';
+  if (task.parentUID == null) return ''; // true root — no guide needed
   // Walk parent chain to build ancestor list (root → … → parent → task)
   const chain = [];
   let cur = task;
