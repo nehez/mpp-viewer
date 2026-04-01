@@ -191,7 +191,7 @@ function applyFilters() {
   const q = filterText.trim().toLowerCase();
 
   const baseFiltered = state.allTasks.filter(t => {
-    if (q && !t.name.toLowerCase().includes(q)) return false;
+    if (q && !t.name.toLowerCase().includes(q) && !t.resources.toLowerCase().includes(q)) return false;
     switch (filterStatus) {
       case 'not-started': if (t.pct !== 0) return false; break;
       case 'in-progress': if (t.pct === 0 || t.pct >= 100) return false; break;
@@ -348,15 +348,15 @@ function exportExcel() {
       `<td style="${cellBase};${rowStyle}${extra}">${String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`;
 
     trs += '<tr>' +
-      td(t.id,                        ';text-align:right;color:#888') +
-      td(t.uid,                       ';text-align:right;color:#888') +
+      td(t.id,                        ';text-align:right;color:#888;mso-number-format:"@"') +
+      td(t.uid,                       ';text-align:right;color:#888;mso-number-format:"@"') +
       td(pad + t.name,                `;font-weight:${fw}`) +
       td(formatDuration(t.duration)) +
       td(formatDate(t.start),         ';color:#555') +
       td(formatDate(t.finish),        ';color:#555') +
-      td(t.pct + '%',                 ';text-align:right;color:#555') +
-      td(t.predStr,                   ';color:#555;font-family:monospace') +
-      td(t.succStr,                   ';color:#555;font-family:monospace') +
+      td(t.pct + '%',                 ';text-align:right;color:#555;mso-number-format:"@"') +
+      td(t.predStr,                   ';color:#555;font-family:monospace;mso-number-format:"@"') +
+      td(t.succStr,                   ';color:#555;font-family:monospace;mso-number-format:"@"') +
       td(t.resources) +
     '</tr>\n';
   }
@@ -831,6 +831,16 @@ document.getElementById('btn-clear-filters').addEventListener('click', () => {
   document.getElementById('filter-search').value = '';
   document.getElementById('filter-status').value = 'all';
   document.getElementById('filter-type').value   = 'all';
+  applyFilters();
+});
+
+// Expand / collapse all summary tasks
+document.getElementById('btn-expand-all').addEventListener('click', () => {
+  state.collapsedSummaries.clear();
+  applyFilters();
+});
+document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  state.allTasks.forEach(t => { if (t.isSummary) state.collapsedSummaries.add(t.uid); });
   applyFilters();
 });
 
