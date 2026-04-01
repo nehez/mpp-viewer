@@ -124,33 +124,45 @@ function parseMspdiXml(xmlText) {
 
       return {
         uid,
-        id:          parseInt(getText(t, 'ID') || '0'),
-        name:        getText(t, 'Name'),
-        start:       getText(t, 'Start'),
-        finish:      getText(t, 'Finish'),
-        duration:    getText(t, 'Duration'),
-        pct:         parseFloat(getText(t, 'PercentComplete') || '0'),
-        outline:     parseInt(getText(t, 'OutlineLevel') || '1'),
-        isSummary:   getText(t, 'Summary')   === '1',
-        isMilestone: getText(t, 'Milestone') === '1',
-        isActive:    getText(t, 'Active') !== '0',  // inactive when Active=0
+        id:            parseInt(getText(t, 'ID') || '0'),
+        name:          getText(t, 'Name'),
+        start:         getText(t, 'Start'),
+        finish:        getText(t, 'Finish'),
+        duration:      getText(t, 'Duration'),
+        pct:           parseFloat(getText(t, 'PercentComplete') || '0'),
+        outline:       parseInt(getText(t, 'OutlineLevel') || '1'),
+        outlineNumber: getText(t, 'OutlineNumber') || '',  // e.g. "1.2.3"
+        isSummary:     getText(t, 'Summary')   === '1',
+        isMilestone:   getText(t, 'Milestone') === '1',
+        isActive:      getText(t, 'Active') !== '0',
         links,
-        resources:   (taskResMap[uid] || []).join('; '),
-        predStr:     '',
-        succStr:     '',
+        resources:     (taskResMap[uid] || []).join('; '),
+        predStr:       '',
+        succStr:       '',
       };
     })
     .filter(t => !(t.id === 0 && !t.name));
 
-  // Compute parentUID for each task using document order + outline levels.
-  // This must happen here while tasks are still in document/outline order.
+  // Compute parentUID using OutlineNumber ("1.2.3") when available — this is
+  // order-independent and unambiguous. Fall back to pStack for files that omit it.
   {
-    const pStack = []; // { uid, outline }
+    const numToUID = {};
     for (const task of tasks) {
-      while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) {
-        pStack.pop();
+      if (task.outlineNumber) numToUID[task.outlineNumber] = task.uid;
+    }
+    const pStack = [];
+    for (const task of tasks) {
+      if (task.outlineNumber) {
+        const dot = task.outlineNumber.lastIndexOf('.');
+        task.parentUID = dot > 0
+          ? (numToUID[task.outlineNumber.slice(0, dot)] ?? null)
+          : null;
+      } else {
+        while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) pStack.pop();
+        task.parentUID = pStack.length > 0 ? pStack[pStack.length - 1].uid : null;
       }
-      task.parentUID = pStack.length > 0 ? pStack[pStack.length - 1].uid : null;
+      // Keep pStack in sync for the fallback path
+      while (pStack.length > 0 && pStack[pStack.length - 1].outline >= task.outline) pStack.pop();
       pStack.push({ uid: task.uid, outline: task.outline });
     }
   }
@@ -204,15 +216,62 @@ function applyFilters() {
   redrawGantt();
 }
 
-// ─── Pred/succ link formatter ─────────────────────────────────────────────────
-// Wraps each numeric ID in a clickable span; suffix (FF/SS/SF) stays plain text.
-function formatLinkHtml(str) {
+// ─── Links modal ─────────────────────────────────────────────────────────────
+const TYPE_NAMES = ['FF', 'FS', 'SF', 'SS'];
+
+function showLinksModal(taskUID, type) {
+  const task = state.uidToTask[taskUID];
+  if (!task) return;
+
+  let items;
+  if (type === 'pred') {
+    items = task.links.map(l => {
+      const t = state.uidToTask[l.predUID];
+      return { id: t?.id ?? l.predUID, name: t?.name ?? `(UID ${l.predUID})`, rel: TYPE_NAMES[l.type] ?? 'FS' };
+    });
+  } else {
+    items = state.allTasks
+      .filter(t => t.links.some(l => l.predUID === taskUID))
+      .map(t => {
+        const link = t.links.find(l => l.predUID === taskUID);
+        return { id: t.id, name: t.name, rel: TYPE_NAMES[link?.type] ?? 'FS' };
+      });
+  }
+
+  document.getElementById('links-modal-title').textContent =
+    (type === 'pred' ? 'Predecessors' : 'Successors') + ' — ' + task.name;
+
+  const listEl = document.getElementById('links-modal-list');
+  listEl.innerHTML = items.length
+    ? items.map(it =>
+        `<button class="lm-item" data-id="${it.id}">` +
+        `<span class="lm-id">${it.id}</span>` +
+        `<span class="lm-rel lm-rel-${it.rel.toLowerCase()}">${it.rel}</span>` +
+        `<span class="lm-name">${escapeHtml(it.name)}</span>` +
+        `</button>`).join('')
+    : `<div class="lm-empty">No ${type === 'pred' ? 'predecessors' : 'successors'}</div>`;
+
+  document.getElementById('links-modal').classList.remove('hidden');
+}
+
+function hideLinksModal() {
+  document.getElementById('links-modal').classList.add('hidden');
+}
+
+document.getElementById('links-modal').addEventListener('click', e => {
+  if (e.target.closest('.links-modal-scrim')) { hideLinksModal(); return; }
+  const item = e.target.closest('.lm-item');
+  if (item) { navigateToTaskId(parseInt(item.dataset.id)); hideLinksModal(); }
+});
+document.getElementById('links-modal-close').addEventListener('click', hideLinksModal);
+
+// ─── Link cell helper ─────────────────────────────────────────────────────────
+function linkCell(str, taskUID, type) {
   if (!str) return '';
-  return str.split(',').map(part => {
-    const m = part.match(/^(\d+)((?:FF|FS|SF|SS)?)$/);
-    if (!m) return escapeHtml(part);
-    return `<span class="task-link" data-id="${m[1]}">${m[1]}</span>${escapeHtml(m[2])}`;
-  }).join('<span style="opacity:.5">,</span>');
+  return `<div class="link-cell-wrap">` +
+    `<span class="link-cell-text">${escapeHtml(str)}</span>` +
+    `<button class="link-expand-btn" data-uid="${taskUID}" data-type="${type}" title="Show all ${type === 'pred' ? 'predecessors' : 'successors'}">↗</button>` +
+    `</div>`;
 }
 
 // ─── Table renderer ───────────────────────────────────────────────────────────
@@ -240,8 +299,8 @@ function renderTable(tasks) {
       `<td class="col-start">${formatDate(task.start)}</td>` +
       `<td class="col-finish">${formatDate(task.finish)}</td>` +
       `<td class="col-pct">${task.pct}%</td>` +
-      `<td class="col-pred" data-val="${escapeHtml(task.predStr)}">${formatLinkHtml(task.predStr)}</td>` +
-      `<td class="col-succ" data-val="${escapeHtml(task.succStr)}">${formatLinkHtml(task.succStr)}</td>` +
+      `<td class="col-pred">${linkCell(task.predStr, task.uid, 'pred')}</td>` +
+      `<td class="col-succ">${linkCell(task.succStr, task.uid, 'succ')}</td>` +
       `<td class="col-res">${escapeHtml(task.resources)}</td>`;
 
     tbody.appendChild(tr);
@@ -328,29 +387,6 @@ function exportExcel() {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-// ─── Pred/succ overflow popover ───────────────────────────────────────────────
-const linkPopover = document.getElementById('link-popover');
-
-function showLinkPopover(anchorEl, valStr) {
-  if (!valStr) return;
-  linkPopover.innerHTML = formatLinkHtml(valStr);
-  const r = anchorEl.getBoundingClientRect();
-  // Position below the cell; flip up if it would go off-screen
-  const top = r.bottom + 4;
-  linkPopover.style.left = r.left + 'px';
-  linkPopover.classList.remove('hidden');
-  // Measure after unhiding, then flip if needed
-  const ph = linkPopover.offsetHeight;
-  linkPopover.style.top = (top + ph > window.innerHeight ? r.top - ph - 4 : top) + 'px';
-}
-
-function hideLinkPopover() { linkPopover.classList.add('hidden'); }
-
-linkPopover.addEventListener('click', e => {
-  const link = e.target.closest('.task-link');
-  if (link) { navigateToTaskId(parseInt(link.dataset.id)); hideLinkPopover(); }
-});
 
 // ─── Gantt: dependency arrow SVG ──────────────────────────────────────────────
 function buildLinkPath(fx, fy, tx, ty, type) {
@@ -820,21 +856,12 @@ document.getElementById('btn-zoom-fit').addEventListener('click', () => {
   }
 });
 
-// Task table click — popover > link navigation > collapse
+// Task table click — expand button opens modal; summary row toggles collapse
 document.getElementById('task-body').addEventListener('click', e => {
-  // Inline task-link click (visible, not truncated)
-  const link = e.target.closest('.task-link');
-  if (link) {
+  const expandBtn = e.target.closest('.link-expand-btn');
+  if (expandBtn) {
     e.stopPropagation();
-    navigateToTaskId(parseInt(link.dataset.id));
-    hideLinkPopover();
-    return;
-  }
-  // Pred/succ cell click → open popover with all links (handles truncated ones)
-  const cell = e.target.closest('.col-pred, .col-succ');
-  if (cell) {
-    const val = cell.dataset.val;
-    if (val) { e.stopPropagation(); showLinkPopover(cell, val); }
+    showLinksModal(parseInt(expandBtn.dataset.uid), expandBtn.dataset.type);
     return;
   }
   // Collapse/expand summary rows
@@ -858,7 +885,6 @@ document.getElementById('btn-cols').addEventListener('click', e => {
 });
 document.addEventListener('click', e => {
   if (!e.target.closest('.col-picker-wrap')) colPicker.classList.add('hidden');
-  if (!e.target.closest('.link-popover') && !e.target.closest('.col-pred, .col-succ')) hideLinkPopover();
 });
 colPicker.addEventListener('change', e => {
   const col = e.target.dataset.col;
@@ -908,7 +934,7 @@ document.getElementById('btn-export').addEventListener('click', exportExcel);
   });
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    msLeft.style.width = Math.max(160, Math.min(1400, startW + e.clientX - startX)) + 'px';
+    msLeft.style.width = Math.max(160, Math.min(window.innerWidth - 300, startW + e.clientX - startX)) + 'px';
   });
   document.addEventListener('mouseup', () => {
     if (!dragging) return; dragging = false;

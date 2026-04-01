@@ -176,8 +176,17 @@
 
   </main>
 
-  <!-- Shared popover for truncated pred/succ links -->
-  <div id="link-popover" class="link-popover hidden"></div>
+  <!-- Predecessors / Successors modal -->
+  <div id="links-modal" class="links-modal hidden" role="dialog" aria-modal="true">
+    <div class="links-modal-scrim"></div>
+    <div class="links-modal-box">
+      <div class="links-modal-hdr">
+        <span id="links-modal-title"></span>
+        <button id="links-modal-close" class="tb-btn">✕</button>
+      </div>
+      <div id="links-modal-list" class="links-modal-list"></div>
+    </div>
+  </div>
 
   <script type="module" src="mpp-viewer.js"></script>
 </body>

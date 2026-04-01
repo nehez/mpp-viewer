@@ -340,32 +340,55 @@ html[data-theme="light"] .col-picker { box-shadow: 0 6px 20px rgba(0,0,0,.15); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 
-/* Clickable pred/succ task ID links */
-.task-link {
-  cursor: pointer;
-  border-bottom: 1px dashed var(--accent);
-  color: var(--accent);
+/* Pred/succ cell — flex row keeps expand button always visible */
+.col-pred, .col-succ { white-space: normal; overflow: hidden; }
+.link-cell-wrap  { display: flex; align-items: center; overflow: hidden; gap: 2px; }
+.link-cell-text  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.link-expand-btn {
+  flex-shrink: 0;
+  padding: 1px 4px; border: none; background: none;
+  color: var(--accent); cursor: pointer; font-size: 11px; opacity: .75;
+  line-height: 1;
 }
-.task-link:hover { border-bottom-style: solid; }
+.link-expand-btn:hover { opacity: 1; }
 
-/* Pred/succ overflow popover */
-.link-popover {
-  position: fixed;
-  z-index: 200;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 8px 12px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.18);
-  font-size: 12px;
-  font-family: var(--mono);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  max-width: 320px;
-  line-height: 1.8;
+/* Predecessors / Successors modal */
+.links-modal {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
 }
-.link-popover .task-link { font-size: 12px; }
+.links-modal-scrim {
+  position: absolute; inset: 0; background: rgba(0,0,0,.45);
+  cursor: pointer;
+}
+.links-modal-box {
+  position: relative; z-index: 1;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); width: min(480px, 92vw);
+  box-shadow: 0 10px 40px rgba(0,0,0,.3);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.links-modal-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  font-weight: 600; font-size: 13px; background: var(--surface);
+  flex-shrink: 0; gap: 12px;
+}
+.links-modal-hdr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-modal-list { overflow-y: auto; max-height: 420px; padding: 6px 0; }
+.lm-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 16px; border: none; background: none;
+  text-align: left; cursor: pointer; font-size: 13px; color: var(--text);
+}
+.lm-item:hover { background: var(--surface); }
+.lm-id   { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 30px; text-align: right; flex-shrink: 0; }
+.lm-rel  { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; background: var(--accent-dim); color: var(--accent); }
+.lm-rel-ff { background: rgba(247,168,79,.15); color: #f7a84f; }
+.lm-rel-ss { background: rgba(76,175,125,.15); color: var(--green); }
+.lm-rel-sf { background: rgba(176,79,247,.15); color: #b04ff7; }
+.lm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-empty { padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
 
 /* Row flash when navigated to */
 @keyframes row-flash {
