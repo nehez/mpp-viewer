@@ -274,12 +274,49 @@ function linkCell(str, taskUID, type) {
     `</div>`;
 }
 
+// ─── Tree guide helpers ───────────────────────────────────────────────────────
+// O(n) backwards pass: first encounter of a parentUID key → that task is last child.
+function computeIsLastChild(tasks) {
+  const last = new Map();
+  const seen = new Set();
+  for (let i = tasks.length - 1; i >= 0; i--) {
+    const key = tasks[i].parentUID ?? -1;
+    last.set(tasks[i].uid, !seen.has(key));
+    seen.add(key);
+  }
+  return last;
+}
+
+// Returns a box-drawing prefix like "│  ├─ " for a task.
+function buildTreeGuide(task, last) {
+  if (task.outline <= 1) return '';
+  // Walk parent chain to build ancestor list (root → … → parent → task)
+  const chain = [];
+  let cur = task;
+  while (cur) {
+    chain.push(cur);
+    cur = cur.parentUID != null ? state.uidToTask[cur.parentUID] : null;
+  }
+  chain.reverse();
+  let g = '';
+  for (let i = 1; i < chain.length; i++) {   // i=0 is root (no guide)
+    const isLast = last.get(chain[i].uid) ?? true;
+    if (i === chain.length - 1) {
+      g += isLast ? '└─\u202f' : '├─\u202f';   // connector for this task
+    } else {
+      g += isLast ? '\u00a0\u00a0\u00a0' : '│\u00a0\u00a0'; // ancestor pipe or gap
+    }
+  }
+  return g;
+}
+
 // ─── Table renderer ───────────────────────────────────────────────────────────
 function renderTable(tasks) {
   const tbody = document.getElementById('task-body');
   tbody.innerHTML = '';
+  const last = computeIsLastChild(tasks);
   for (const task of tasks) {
-    const indent      = Math.max(0, task.outline - 1) * 14;
+    const guide       = buildTreeGuide(task, last);
     const isCollapsed = task.isSummary && state.collapsedSummaries.has(task.uid);
     const chevron     = task.isSummary
       ? `<span class="chevron">${isCollapsed ? '▶' : '▼'}</span>`
@@ -294,7 +331,7 @@ function renderTable(tasks) {
     tr.innerHTML =
       `<td class="col-id">${task.id}</td>` +
       `<td class="col-uid">${task.uid}</td>` +
-      `<td class="col-name"><span class="task-name" style="padding-left:${indent}px">${chevron}${escapeHtml(task.name)}</span></td>` +
+      `<td class="col-name"><span class="task-name"><span class="tree-guide">${guide}</span>${chevron}<span class="task-text">${escapeHtml(task.name)}</span></span></td>` +
       `<td class="col-dur">${formatDuration(task.duration)}</td>` +
       `<td class="col-start">${formatDate(task.start)}</td>` +
       `<td class="col-finish">${formatDate(task.finish)}</td>` +

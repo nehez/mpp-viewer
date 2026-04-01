@@ -351,7 +351,17 @@ html[data-theme="light"] .col-picker { box-shadow: 0 6px 20px rgba(0,0,0,.15); }
 /* Task name cell */
 .task-name {
   display: inline-flex; align-items: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  max-width: 100%; overflow: hidden;
+}
+.tree-guide {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--muted); white-space: pre;
+  flex-shrink: 0; opacity: 0.65;
+}
+tr.summary .tree-guide { color: var(--summary-text); opacity: 0.75; }
+.task-text {
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0;
 }
 
 /* Pred/succ cell — flex row keeps expand button always visible */
@@ -501,7 +511,7 @@ tr.summary .chevron { color: var(--summary-text); }
 
 /* Inactive tasks */
 .ms-table tbody tr.inactive td        { opacity: 0.4; }
-.ms-table tbody tr.inactive .task-name { text-decoration: line-through; }
+.ms-table tbody tr.inactive .task-text { text-decoration: line-through; }
 .gbar-row.inactive .gantt-bar,
 .gbar-row.inactive .gantt-diamond     { opacity: 0.3; filter: saturate(0.2); }
 
