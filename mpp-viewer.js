@@ -344,20 +344,23 @@ function exportExcel() {
     const opacity = t.isActive  ? '' : ';color:#999;text-decoration:line-through';
 
     const rowStyle = `background:${bg}${opacity}`;
-    const td = (v, extra = '') =>
-      `<td style="${cellBase};${rowStyle}${extra}">${String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`;
+    // x:str attribute forces Excel to treat the cell as text, preventing numeric reinterpretation
+    const td = (v, extra = '', forceText = false) => {
+      const str = String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return `<td${forceText ? ' x:str' : ''} style="${cellBase};${rowStyle}${extra}">${str}</td>`;
+    };
 
     trs += '<tr>' +
-      td(t.id,                        ';text-align:right;color:#888;mso-number-format:"@"') +
-      td(t.uid,                       ';text-align:right;color:#888;mso-number-format:"@"') +
+      td(t.id,                        ';text-align:right;color:#888',          true) +
+      td(t.uid,                       ';text-align:right;color:#888',          true) +
       td(pad + t.name,                `;font-weight:${fw}`) +
       td(formatDuration(t.duration)) +
       td(formatDate(t.start),         ';color:#555') +
       td(formatDate(t.finish),        ';color:#555') +
-      td(t.pct + '%',                 ';text-align:right;color:#555;mso-number-format:"@"') +
-      td(t.predStr,                   ';color:#555;font-family:monospace;mso-number-format:"@"') +
-      td(t.succStr,                   ';color:#555;font-family:monospace;mso-number-format:"@"') +
-      td(t.resources) +
+      td(t.pct + '%',                 ';text-align:right;color:#555',          true) +
+      td(t.predStr,                   ';color:#555;font-family:monospace',     true) +
+      td(t.succStr,                   ';color:#555;font-family:monospace',     true) +
+      td(t.resources,                 '',                                      true) +
     '</tr>\n';
   }
 
@@ -834,12 +837,19 @@ document.getElementById('btn-clear-filters').addEventListener('click', () => {
   applyFilters();
 });
 
-// Expand / collapse all summary tasks
+// Tree picker (expand/collapse all dropdown)
+const treePicker = document.getElementById('tree-picker');
+document.getElementById('btn-tree').addEventListener('click', e => {
+  e.stopPropagation();
+  treePicker.classList.toggle('hidden');
+});
 document.getElementById('btn-expand-all').addEventListener('click', () => {
+  treePicker.classList.add('hidden');
   state.collapsedSummaries.clear();
   applyFilters();
 });
 document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  treePicker.classList.add('hidden');
   state.allTasks.forEach(t => { if (t.isSummary) state.collapsedSummaries.add(t.uid); });
   applyFilters();
 });
@@ -894,7 +904,10 @@ document.getElementById('btn-cols').addEventListener('click', e => {
   colPicker.classList.toggle('hidden');
 });
 document.addEventListener('click', e => {
-  if (!e.target.closest('.col-picker-wrap')) colPicker.classList.add('hidden');
+  if (!e.target.closest('.col-picker-wrap')) {
+    colPicker.classList.add('hidden');
+    treePicker.classList.add('hidden');
+  }
 });
 colPicker.addEventListener('change', e => {
   const col = e.target.dataset.col;

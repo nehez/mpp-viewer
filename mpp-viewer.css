@@ -266,6 +266,20 @@ html[data-theme="light"] .col-picker { box-shadow: 0 6px 20px rgba(0,0,0,.15); }
 .col-picker label:hover { background: var(--surface); }
 .col-picker input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 
+.picker-action {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  font-size: 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.picker-action:hover { background: var(--surface); }
+
 /* ─── Split layout ───────────────────────────────────────────────────────── */
 .ms-layout {
   flex: 1;

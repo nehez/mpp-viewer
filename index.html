@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MPP File Viewer v1.8.0</title>
+  <title>MPP File Viewer v1.9.0</title>
   <link rel="stylesheet" href="mpp-viewer.css" />
 </head>
 <body>
   <header>
-    <div class="logo">MPP File Viewer <span class="version">v1.8.0</span></div>
+    <div class="logo">MPP File Viewer <span class="version">v1.9.0</span></div>
     <div class="subtitle">Microsoft Project XML viewer — 100% client-side, no upload</div>
     <div class="header-actions">
       <button id="btn-theme" class="tb-btn theme-btn" title="Toggle light/dark mode">☾</button>
@@ -110,8 +110,13 @@
               <label><input type="checkbox" data-col="res"    checked /> Resources</label>
             </div>
           </div>
-          <button id="btn-expand-all"   class="tb-btn" title="Expand all summary tasks">⊞ Expand</button>
-          <button id="btn-collapse-all" class="tb-btn" title="Collapse all summary tasks">⊟ Collapse</button>
+          <div class="col-picker-wrap">
+            <button id="btn-tree" class="tb-btn" title="Expand or collapse all tasks">Tree ▾</button>
+            <div id="tree-picker" class="col-picker hidden">
+              <button class="picker-action" id="btn-expand-all">⊞ Expand all</button>
+              <button class="picker-action" id="btn-collapse-all">⊟ Collapse all</button>
+            </div>
+          </div>
           <button id="btn-clear-filters" class="tb-btn" title="Clear all filters">✕ Clear</button>
           <span id="filter-count" class="filter-count"></span>
         </div>
