@@ -203,6 +203,15 @@ function applyFilters() {
       case 'not-started': if (t.pct !== 0 || !t.isActive) return false; break;
       case 'in-progress': if (t.pct === 0 || t.pct >= 100) return false; break;
       case 'complete':    if (t.pct < 100) return false; break;
+      case 'lookahead': {
+        const now   = new Date(); now.setHours(0,0,0,0);
+        const limit = new Date(now); limit.setMonth(limit.getMonth() + 3);
+        const s = t.start  ? new Date(t.start)  : null;
+        const f = t.finish ? new Date(t.finish) : null;
+        const inWindow = (d) => d && d >= now && d <= limit;
+        if (!inWindow(s) && !inWindow(f)) return false;
+        break;
+      }
     }
     switch (filterType) {
       case 'normal':    if (t.isSummary || t.isMilestone) return false; break;
