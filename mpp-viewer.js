@@ -200,7 +200,7 @@ function applyFilters() {
   const baseFiltered = state.allTasks.filter(t => {
     if (q && !t.name.toLowerCase().includes(q) && !t.resources.toLowerCase().includes(q)) return false;
     switch (filterStatus) {
-      case 'not-started': if (t.pct !== 0) return false; break;
+      case 'not-started': if (t.pct !== 0 || !t.isActive) return false; break;
       case 'in-progress': if (t.pct === 0 || t.pct >= 100) return false; break;
       case 'complete':    if (t.pct < 100) return false; break;
     }
